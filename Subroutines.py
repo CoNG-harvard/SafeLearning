@@ -1,7 +1,35 @@
 import numpy as np
 import cvxpy as cp
 
-def ModelEst(x_hist,u_hist,w_max=0.2,eta_bar=1,stability_gap = 0.1):
+def spectral_radius(A):
+    return np.max(np.abs(np.linalg.eigvals(A)))
+
+def find_stable_radius(A0,K=10000,M=10,N=100,delta=0.03):
+    '''
+        e: the largest radius e such that the random samples from B(A,e) contains stable matrices only.
+        Setting K~=10000 is usually more than good enough an approximation.
+    '''
+
+    def sup_lambda_max(e):
+        random_dir = np.random.rand(*tuple(list(A0.shape)+[K]))
+        random_dir = np.random.rand(*tuple(list(A0.shape)+[K]))
+        random_dir/=np.linalg.norm(random_dir,axis=(0,1))
+        random_dir = random_dir.T
+        A_cand = e*random_dir+A0
+        return np.max(np.abs(np.linalg.eigvals(A_cand)))
+
+    for i in range(M): # Coarse-grained search
+        e = 10**(-i)
+        if sup_lambda_max(e)<1: # Fine-grained search
+            e_fine = np.linspace(10**(-i),10**(-i+1),N)
+            sup_l = np.array([sup_lambda_max(ef) for ef in e_fine])
+            i_max = np.sum(sup_l<1-delta)-1
+            print(sup_l[i_max])
+            return e_fine[i_max]
+
+    return None
+
+def ModelEstV1(x_hist,u_hist,eta_bar=1,stability_gap = 0.1):
     '''
         stability_gap: how far the largest eigenvalue of A_hat should at least be below 1.
     '''
@@ -103,27 +131,144 @@ def max_norm(D,d):
     return np.max(dists)
 
 
-# Get M_mid
-def M_mid(A_hat,B_hat,r,H,eta_bar,D_M,D_x,d_x,D_u,d_u,x_max,u_max,x_hist,u_hist,w_max,A_prev,B_prev,r_prev,eta_bar_prev,x_prev,u_prev,M_prev,M_dest):
-    if len(x_hist.shape)>1:
-        x_dim  = x_hist.shape[-1]
-    else:
-        x_dim = 1
+# Deprecated. See SafeDAP.mid() for the cleaner implementation of mid calculation.
+# def M_mid(A_hat,B_hat,r,H,eta_bar,D_M,D_x,d_x,D_u,d_u,x_max,u_max,x_hist,u_hist,w_max,A_prev,B_prev,r_prev,eta_bar_prev,x_prev,u_prev,M_prev,M_dest):
+#     if len(x_hist.shape)>1:
+#         x_dim  = x_hist.shape[-1]
+#     else:
+#         x_dim = 1
 
-    if len(u_hist.shape)>1:
-        u_dim = u_hist.shape[-1]
-    else:
-        u_dim = 1
+#     if len(u_hist.shape)>1:
+#         u_dim = u_hist.shape[-1]
+#     else:
+#         u_dim = 1
 
-    M = [cp.Variable((u_dim,x_dim)) for _ in range(H)]
+#     M = [cp.Variable((u_dim,x_dim)) for _ in range(H)]
 
 
-    omega1,_ = OMEGA(M,A_hat,B_hat,r,H,eta_bar,D_M,D_x,d_x,D_u,d_u,x_max,u_max,x_hist,u_hist,w_max)
-    omega2,_ = OMEGA(M,A_prev,B_prev,r_prev,H,eta_bar_prev,D_M,D_x,d_x,D_u,d_u,x_max,u_max,x_prev,u_prev,w_max)
+#     omega1,_ = OMEGA(M,A_hat,B_hat,r,H,eta_bar,D_M,D_x,d_x,D_u,d_u,x_max,u_max,x_hist,u_hist,w_max)
+#     omega2,_ = OMEGA(M,A_prev,B_prev,r_prev,H,eta_bar_prev,D_M,D_x,d_x,D_u,d_u,x_max,u_max,x_prev,u_prev,w_max)
 
-    omega_intersection = omega1+omega2
+#     omega_intersection = omega1+omega2
 
-    prob = cp.Problem(cp.Minimize(cp.sum([cp.norm(M_prev[k]-M[k],2)**2+cp.norm(M_dest[k]-M[k],2)**2 for k in range(H)])),omega_intersection)
+#     prob = cp.Problem(cp.Minimize(cp.sum([cp.norm(M_prev[k]-M[k],2)**2+cp.norm(M_dest[k]-M[k],2)**2 for k in range(H)])),omega_intersection)
 
-    prob.solve()
-    return [m.value for m in M]
+#     prob.solve()
+#     return [m.value for m in M]
+
+class ModelEstV2:
+    def __init__(self,A0,B0,eps_init):
+        self.A0 = A0
+        self.B0 = B0
+        self.eps_init = eps_init
+        
+    def project(A_hat,A0,eps_init):
+        A_proj = cp.Variable(A_hat.shape)
+        constraint = [ cp.norm(A_proj-A0,'fro') <= eps_init]
+        prob2 = cp.Problem(cp.Minimize(cp.norm(A_proj-A_hat,'fro')),constraint)
+        prob2.solve()
+        return A_proj.value
+        
+    def est(self,x_hist,u_hist,eta_bar=1):
+        # L2 Estimation
+        if len(x_hist.shape)>1:
+            x_dim  = x_hist.shape[-1]
+        else:
+            x_dim = 1
+        if len(u_hist.shape)>1:
+            u_dim = u_hist.shape[-1]
+        else:
+            u_dim = 1
+
+        A_hat = cp.Variable((x_dim,x_dim))
+        B_hat = cp.Variable((x_dim,u_dim))
+
+        x_t = x_hist[:-1,:]
+        x_t_1 = x_hist[1:,:]
+
+        objective = cp.Minimize(cp.sum_squares(x_t_1.T - A_hat @ x_t.T - B_hat @ u_hist.T ))
+
+        prob = cp.Problem(objective)
+
+        prob.solve()
+
+        r = np.sqrt(x_dim**2 + x_dim*u_dim)/(np.sqrt(len(x_t))*eta_bar)
+
+        # Projection
+        A_proj = ModelEstV2.project(A_hat.value,self.A0,self.eps_init)
+        B_proj = ModelEstV2.project(B_hat.value,self.B0,self.eps_init)
+        
+        return A_proj, B_proj, r
+
+class SafeTransit:
+    '''
+        This class handles the slow-varying transit form old controller M to new M.
+    '''
+    def __init__(self,old,new,mid,H,W1=None,W2=None):
+        '''
+            old, new are dictionaries with at least the following items:
+            {'M':np.array, 'theta':tuple,'eta':explorative noise level(positive)}
+        '''
+        self.old = old
+        self.new = new
+        self.M = np.array(self.old['M'])
+        self.mid = mid
+         
+        self.DM = 0.01 # The default variation budget. 
+        
+        if W1 is None:
+            self.W1 = int(np.ceil(np.max([np.linalg.norm(self.old['M']-self.mid)/self.DM,H])))
+        else:
+            self.W1 = W1 # The number of self.step() calls required to transit from old['M'] to mid.
+        
+        if W2 is None:
+            self.W2 = int(np.ceil(np.linalg.norm(self.new['M']-self.mid)/self.DM))
+        else:
+            self.W2 = W2 # The number of self.step() calls to transit from mid to new['M'].
+        
+        self.step_count = 0 # The counter of self.step() calls
+
+        self.eta_min = np.min([self.old['eta'],self.new['eta']])
+
+        if self.old['r']>self.new['r']:
+            self.theta_min = self.new['theta']
+        else:
+            self.theta_min = self.old['theta']
+
+    def get_theta(self):
+        if self.step_count<self.W1:
+            # print('theta_min',self.theta_min)
+            return self.theta_min
+        else:
+            # print('new theta',self.new['theta'])
+            return self.new['theta']
+
+    def update_W(self,M_origin,M_target,W): 
+        self.M += (M_target-M_origin)/W
+        
+    def step(self):
+        
+        # print('W1,W2:',self.W1,self.W2)
+
+        # Check the transit phase.
+        if self.step_count<self.W1:
+            
+            self.update_W(self.old['M'], self.mid, self.W1)
+            # print('Step:',self.step_count,'before mid',np.linalg.norm(self.M-self.mid))
+            
+        elif self.step_count<self.W1+self.W2:
+            
+            self.update_W(self.mid, self.new['M'],self.W2)
+            # print('Step:',self.step_count,'after mid',np.linalg.norm(self.M-self.new['M']))
+        
+        # If step count has gone above W1+W2, transit no more.
+        
+        self.step_count +=1
+        return self.M
+
+    def get_u(self,w_hat_hist):
+        if self.step_count<self.W1:
+            return ApproxDAP(self.M, w_hat_hist, self.eta_min)
+        else:
+            return ApproxDAP(self.M, w_hat_hist, self.new['eta'])
+       
