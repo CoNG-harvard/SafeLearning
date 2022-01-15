@@ -65,7 +65,7 @@
 	Section \ref{sec:details} contains detailed documentations for each component of the implementation.
 	
 	\section{System Model}\label{sec:system}
-	We consider a dampened spring-mass system in the simulation. The system contains a mass with weight $m>0$ attached to a spring with stiffness constant $k>0$. The mass is restricted to move along a one-dimensional surface perpendicular to the gravity direction, and we assume no friction between the mass and the surface. We can apply an external force
+	We consider a dampened spring-mass system in the simulation. The system contains a mass with weight $m>0$ attached to a spring with stiffness constant $k>0$. The mass is restricted to move along a one-dimensional surface perpendicular to the gravity direction. We assume no friction between the mass and the surface, but there is a drag negatively proportional to the velocity of the mass, with a drag constant $\lambda>0$. We can apply an external force
 	$u$ on the mass along the trajectory of its movement to control its state.
 	
 	Let $x\in \mathbb{R}$ be the location of the mass, the system equation in continuous time can be defined as 
@@ -89,7 +89,7 @@
 	\frac{\Delta}{m}
 	\end{bmatrix}u_{t-1}
 	\end{equation}
-where $\Delta>0$ is a small constant representing the sampling time interval.
+where $s_t$ is the system state at time step $t$, and $\Delta>0$ is a small constant representing the sampling time interval.
 
 	\section{How to run the simulations}\label{sec:howto}
 
@@ -126,7 +126,7 @@ where $\Delta>0$ is a small constant representing the sampling time interval.
 		\label{fig:jupyter}
 	\end{figure}
 	
-	\textbf{Step 4}: in the jupyter lab window, double click to open the \textit{[Safe Learning Simulation.ipynb]} notebook. 
+	\textbf{Step 4}: in the jupyter lab window, navigate to \textit{notebooks} foler, double click to open the \textit{[Safe Learning Simulation.ipynb]} notebook. 
 	
 	Press \textit{Esc} to enter command mode. 
 	
@@ -137,7 +137,31 @@ where $\Delta>0$ is a small constant representing the sampling time interval.
 	The Python notebook works similarly as the live scripts/run by section utility in Matlab. Watch this video for a 30-min beginner's tutorial on Python notebooks:\url{https://www.youtube.com/watch?v=HW29067qVWk}.
 	
 	\section{Detailed Documentations}\label{sec:details}
+	\subsection{File Structure}
+	The repository is structured in the following manner:
 	
+	\begin{verbatim}
+		Repository Root
+		- Scripts(.py files) and README
+		- documentation
+		  - Latex files
+		- notebooks
+		  - Demonstration notebook(SafeLearningSimulation.ipynb)
+		  - Devel
+		    - Notebooks under development
+		    - The data folder
+		      - Data files(.pkl)
+		  - Folders containing specific experiments
+		    - The simulation notebook
+		    - The plotting notebook
+		    - The data folder
+		      - Data files(.pkl)
+	\end{verbatim}
+	We ensure the data files are encapsulated in the inner-most layer and the scripts are exposed in the outer-most layer, and that folders for individual experiments follow the template specified above.
+	\subsection{Environment}
+	\subsection{Controllers}
+	\subsection{Subroutines}
+	\subsection{Simulations}
 	\bibliographystyle{IEEEtran}
 	\bibliography{reference}
 \end{document}

@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.20 (TeX Live 2019/Debian) (preloaded format=pdflatex 2021.7.26)  13 JAN 2022 10:03
+This is pdfTeX, Version 3.14159265-2.6-1.40.20 (TeX Live 2019/Debian) (preloaded format=pdflatex 2021.7.26)  15 JAN 2022 17:47
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -518,7 +518,7 @@ Overfull \hbox (22.4968pt too wide) in paragraph at lines 111--111
 matplotlib[] 
  []
 
-<jupyter.png, id=50, 1927.2pt x 1168.365pt>
+<jupyter.png, id=69, 1927.2pt x 1168.365pt>
 File: jupyter.png Graphic file (type png)
 <use jupyter.png>
 Package pdftex.def Info: jupyter.png  used on input line 124.
@@ -528,24 +528,24 @@ Package pdftex.def Info: jupyter.png  used on input line 124.
 Package caption Warning: Unused \captionsetup[sub] on input line 19.
 See the caption package documentation for explanation.
 
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 143.
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 167.
 [3]
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 143.
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 167.
  (./documentation.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 143.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 143.
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 167.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 167.
 Package rerunfilecheck Info: File `documentation.out' has not changed.
-(rerunfilecheck)             Checksum: DE1D1E497CB51D69F0113AB9343CB80A;213.
-Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 143.
+(rerunfilecheck)             Checksum: 70094C6D2C8AC903B5EC47133046C826;516.
+Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 167.
  ) 
 Here is how much of TeX's memory you used:
- 9497 strings out of 481239
- 142541 string characters out of 5920377
+ 9507 strings out of 481239
+ 142691 string characters out of 5920377
  414607 words of memory out of 5000000
- 24564 multiletter control sequences out of 15000+600000
+ 24569 multiletter control sequences out of 15000+600000
  545933 words of font info for 74 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 48i,7n,46p,479b,315s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 48i,7n,46p,475b,458s stack positions out of 5000i,500n,10000p,200000b,80000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></usr/shar
 e/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/share/texl
@@ -559,10 +559,10 @@ s/cm/cmsy7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cm
 ti10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.p
 fb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pf
 b>
-Output written on documentation.pdf (3 pages, 280187 bytes).
+Output written on documentation.pdf (3 pages, 284558 bytes).
 PDF statistics:
- 114 PDF objects out of 1000 (max. 8388607)
- 93 compressed objects within 1 object stream
- 13 named destinations out of 1000 (max. 500000)
- 38 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 135 PDF objects out of 1000 (max. 8388607)
+ 113 compressed objects within 2 object streams
+ 18 named destinations out of 1000 (max. 500000)
+ 78 words of extra memory for PDF output out of 10000 (max. 10000000)
 
