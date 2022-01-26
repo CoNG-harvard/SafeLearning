@@ -67,8 +67,11 @@ class SafeDAP:
             A_pow = [np.eye(self.x_dim)]
             for i in range(H):
                 A_pow.append(A_pow[-1].dot(A))
+            
+            # print('A_pow',A_pow)
             # Express Transition Kernel Phi
             Phi = []
+
 
             for k in range(2*H):
                 if k<H:
@@ -86,6 +89,7 @@ class SafeDAP:
             for i in range(len(self.D_x)):
                 gi = cp.sum([cp.norm(self.D_x[i,:] @ Phi[k],1) for k in range(2*H)]) * self.w_max
                 x_con.append(gi<=self.d_x[i]-e_x)
+            # print('Sum of (A_pow norm1)',np.sum([np.linalg.norm(A,1) for A in A_pow]))
 
             u_con = []
             for j in range(len(self.D_u)):
@@ -118,7 +122,7 @@ class SafeDAP:
 
         return np.array([m.value for m in mid])
 
-    def solve(self,A,B,H,e_x=None,e_u=None):
+    def solve(self,A,B,H,e_x=None,e_u=None,unconstrained=False,K_stab=None):
         
         if e_x is None or e_u is None:
             e_x,e_u = self.get_tightening_coefs(A,B,H)
@@ -126,6 +130,8 @@ class SafeDAP:
 
         # The policy M. cvxpy does not support tensor variable with # axes>2. We need to use a list here.
         M = [cp.Variable((self.u_dim,self.x_dim)) for _ in range(H)]
+        
+
         R_sqrt = sqrtm(self.R)
         Q_sqrt = sqrtm(self.Q)
         w_sqrt = sqrtm(self.w_cov)
@@ -133,21 +139,28 @@ class SafeDAP:
         OMEGA,Phi = self.omega_phi(M,A,B,e_x,e_u,H)
 
         # The R loss
-        R_loss = cp.sum([cp.norm(R_sqrt @ M[k] @ w_sqrt,'fro')**2 for k in range(H)])
+        if K_stab is None: # Not includng K_stab
+            R_loss = cp.sum([cp.norm(R_sqrt @ M[k] @ w_sqrt,'fro')**2 for k in range(H)])
+        else: # Including K_stab
+            R_loss = cp.sum([cp.norm(R_sqrt @ M[0] @ w_sqrt,'fro')**2 ]\
+                +[cp.norm(R_sqrt @ (M[k]+K_stab @ Phi[k]) @ w_sqrt,'fro')**2 for k in range(1,H)]\
+                )
 
         # The Q loss
         Q_loss = cp.sum([cp.norm(Q_sqrt @ Phi[k] @ w_sqrt,'fro')**2 for k in range(2*H)])
 
         # Solve the problem
-        prob = cp.Problem(cp.Minimize(R_loss+Q_loss),OMEGA)
-        # prob = cp.Problem(cp.Minimize(R_loss+Q_loss))
-
+        if unconstrained:
+            prob = cp.Problem(cp.Minimize(R_loss+Q_loss))
+        else:
+            prob = cp.Problem(cp.Minimize(R_loss+Q_loss),OMEGA)
+        
 
         # prob.solve(verbose=True)
         prob.solve(verbose=False)
         
         self.M =  [m.value for m in M]
-        
+        # print(prob.value)
         return [m.value for m in M],[p.value for p in Phi[1:]]+[Phi[0]]
     
     

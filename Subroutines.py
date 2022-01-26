@@ -24,7 +24,7 @@ def find_stable_radius(A0,K=10000,M=10,N=100,delta=0.03):
             e_fine = np.linspace(10**(-i),10**(-i+1),N)
             sup_l = np.array([sup_lambda_max(ef) for ef in e_fine])
             i_max = np.sum(sup_l<1-delta)-1
-            print(sup_l[i_max])
+            # print(sup_l[i_max])
             return e_fine[i_max]
 
     return None
@@ -156,20 +156,38 @@ def max_norm(D,d):
 #     prob.solve()
 #     return [m.value for m in M]
 
+class ModelEst:
+
+    def project(self,A_hat):
+        raise NotImplementedError
+
+  
+
+
+
 class ModelEstV2:
     def __init__(self,A0,B0,eps_init):
         self.A0 = A0
         self.B0 = B0
         self.eps_init = eps_init
-        
-    def project(A_hat,A0,eps_init):
+    
+    @classmethod
+    def ball_project(cls,A_hat,A0,eps_init):
         A_proj = cp.Variable(A_hat.shape)
         constraint = [ cp.norm(A_proj-A0,'fro') <= eps_init]
         prob2 = cp.Problem(cp.Minimize(cp.norm(A_proj-A_hat,'fro')),constraint)
         prob2.solve()
         return A_proj.value
-        
+
+    def project(self,A_hat,B_hat):
+
+        A_proj = self.ball_project(A_hat,self.A0,self.eps_init)
+        B_proj = self.ball_project(B_hat,self.B0,self.eps_init)
+ 
+        return A_proj,B_proj
+
     def est(self,x_hist,u_hist,eta_bar=1):
+
         # L2 Estimation
         if len(x_hist.shape)>1:
             x_dim  = x_hist.shape[-1]
@@ -194,11 +212,126 @@ class ModelEstV2:
 
         r = np.sqrt(x_dim**2 + x_dim*u_dim)/(np.sqrt(len(x_t))*eta_bar)
 
-        # Projection
-        A_proj = ModelEstV2.project(A_hat.value,self.A0,self.eps_init)
-        B_proj = ModelEstV2.project(B_hat.value,self.B0,self.eps_init)
+
+        A_proj,B_proj = self.project(A_hat.value,B_hat.value)
+
+        return A_proj, B_proj, r    
+
+class ModelEstV3(ModelEstV2):
+    '''
+        Use the system knowledge to project A_hat, B_hat.
+    '''
+    def __init__(self):
+        pass
+    
+    def project(self,A_hat,B_hat):
+
+        # print(A_hat,B_hat)
+        I = np.eye(2)
+
+        a,b,c,d = [cp.Variable(nonneg=True) for _ in range(4)]
+
+        A_proj = I+cp.vstack([cp.hstack([0,a]),cp.hstack([-b,-c])])
+
+        B_proj = cp.vstack([0,d])
+
+        objective = cp.norm(A_proj-A_hat)**2+cp.norm(B_proj-B_hat)**2
+
+        prob = cp.Problem(cp.Minimize(objective))
+
+        prob.solve()
+
+        return A_proj.value,B_proj.value
+
+class ModelEstV4(ModelEstV2):
+    '''
+        Only use the system knowledge to project A_hat, and leave B_hat as it is.
+        This creates some difficulty in learning B_hat.
+    '''
+    def __init__(self):
+        pass
+    
+    def project(self,A_hat,B_hat):
+
+        # print(A_hat,B_hat)
+        I = np.eye(2)
+
+        a,b,c= [cp.Variable(nonneg=True) for _ in range(3)]
+
+        A_proj = I+cp.vstack([cp.hstack([0,a]),cp.hstack([-b,-c])])
+
+        # B_proj = cp.vstack([0,d])
+
+        objective = cp.norm(A_proj-A_hat)**2
+
+        prob = cp.Problem(cp.Minimize(objective))
+
+        prob.solve()
+
+        return A_proj.value,B_hat
+
+class QuadrotorEst:
+    def __init__(self,K_stab,dt,alpha_limit,beta_limit):
+        '''
+            alpha_limit:(alpha_min,alpha_max)
+            beta_limit: similar to alpha_limit.
+        '''
+        self.K_stab = K_stab
+        self.dt = dt
+        self.alpha_limit = alpha_limit
+        self.beta_limit = beta_limit
+    
+    @classmethod
+    def interval_project(cls,a,a_lim):
         
-        return A_proj, B_proj, r
+        if a>np.max(a_lim):
+            a = np.max(a_lim)
+        elif a<np.min(a_lim):
+            a = np.min(a_lim)
+        
+        return a
+
+    def project(self,alpha,beta):
+ 
+        return self.interval_project(alpha,self.alpha_limit),self.interval_project(beta,self.beta_limit)
+
+    def est(self,x_hist,u_hist,eta_bar=1):
+
+        # L2 Estimation
+        if len(x_hist.shape)>1:
+            x_dim  = x_hist.shape[-1]
+        else:
+            x_dim = 1
+        if len(u_hist.shape)>1:
+            u_dim = u_hist.shape[-1]
+        else:
+            u_dim = 1
+
+        alpha = cp.Variable(nonneg = True )
+        beta = cp.Variable(nonneg = True)
+
+        x_t = x_hist[:-1,:]
+        x_t_1 = x_hist[1:,:]
+        
+        A_hat = cp.vstack([cp.hstack([1,self.dt]),cp.hstack([0,1-beta])])
+        B_hat = cp.vstack([0,alpha])
+
+        objective = cp.Minimize(cp.sum_squares(x_t_1.T - ((A_hat-B_hat @ self.K_stab) @ x_t.T - B_hat @ u_hist.T )))
+
+        prob = cp.Problem(objective)
+
+        prob.solve()
+
+        r = np.sqrt(x_dim**2 + x_dim*u_dim)/(np.sqrt(len(x_t))*eta_bar)
+
+        # print('alpha',alpha.value,'beta',beta.value)            
+   
+        alpha_proj,beta_proj = self.project(alpha.value,beta.value)
+        # print('alpha_proj',alpha_proj,'beta_proj',beta_proj)            
+        A_proj = np.array([[1,self.dt],[0,1-beta_proj]])
+        B_proj = np.array([[0],[alpha_proj]])
+
+        return A_proj, B_proj, r    
 
 class SafeTransit:
     '''
@@ -212,11 +345,15 @@ class SafeTransit:
         self.old = old
         self.new = new
         self.M = np.array(self.old['M'])
-        self.mid = mid
+        if any([m is None for m in mid]):
+            self.mid = np.array(self.new['M'])
+        else:
+            self.mid = mid
          
         self.DM = 0.01 # The default variation budget. 
         
         if W1 is None:
+            # print(self.mid)
             self.W1 = int(np.ceil(np.max([np.linalg.norm(self.old['M']-self.mid)/self.DM,H])))
         else:
             self.W1 = W1 # The number of self.step() calls required to transit from old['M'] to mid.
