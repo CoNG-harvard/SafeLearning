@@ -61,9 +61,12 @@ class SafeDAP:
         print('gamma',gamma,'kappa_B',kappa_B,'z_max',z_max,'kappa',kappa)
         return e_x,e_u
 
-    def omega_phi(self,M,A,B,e_x,e_u,H):
-                    
-            # A_pow[n] = A^n, A_pow[0:H-1]
+    def omega_phi(self,M,A,B,e_x,e_u,H,K_stab=None):
+            
+            if K_stab is None:
+                K_stab = 0
+
+            # A_pow[n] = A^n, A_pow[0:H]
             A_pow = [np.eye(self.x_dim)]
             for i in range(H):
                 A_pow.append(A_pow[-1].dot(A))
@@ -71,7 +74,6 @@ class SafeDAP:
             # print('A_pow',A_pow)
             # Express Transition Kernel Phi
             Phi = []
-
 
             for k in range(2*H):
                 if k<H:
@@ -92,15 +94,16 @@ class SafeDAP:
             # print('Sum of (A_pow norm1)',np.sum([np.linalg.norm(A,1) for A in A_pow]))
 
             u_con = []
-            for j in range(len(self.D_u)):
-                gj = cp.sum([cp.norm(self.D_u[j,:] @ M[k],1) for k in range(H)]) * self.w_max
-                u_con.append(gj<=self.d_u[j]-e_u)
+            # for j in range(len(self.D_u)):
+
+            #     gj = cp.sum([cp.norm(self.D_u[j,:] @ (M[k]-K_stab @ Phi[k]),1) for k in range(H)]+[cp.norm(self.D_u[j,:] @ (-K_stab @ Phi[k]),1) for k in range(H,2*H)]) * self.w_max
+            #     u_con.append(gj<=self.d_u[j]-e_u)
 
             OMEGA = x_con + u_con
             
             return OMEGA,Phi
 
-    def mid(self,old,new,H):
+    def mid(self,old,new,H,K_stab):
         '''
             Find the middle-point policy that lies within the intersection of old Omega and new Omega.
             We specify mid to be the one with the smallest sum of Frobenius distance squares to M_old and M_new.
@@ -108,8 +111,8 @@ class SafeDAP:
         
         mid = [cp.Variable(m.shape) for m in old['M']]
 
-        O,_ = self.omega_phi(mid,old['theta'][0],old['theta'][1],old['e_x'],old['e_u'],H)
-        O_new,_ = self.omega_phi(mid,new['theta'][0],new['theta'][1],new['e_x'],new['e_u'],H)
+        O,_ = self.omega_phi(mid,old['theta'][0],old['theta'][1],old['e_x'],old['e_u'],H,K_stab)
+        O_new,_ = self.omega_phi(mid,new['theta'][0],new['theta'][1],new['e_x'],new['e_u'],H,K_stab)
 
 
         constraints = O + O_new
@@ -131,20 +134,20 @@ class SafeDAP:
         # The policy M. cvxpy does not support tensor variable with # axes>2. We need to use a list here.
         M = [cp.Variable((self.u_dim,self.x_dim)) for _ in range(H)]
         
-
         R_sqrt = sqrtm(self.R)
         Q_sqrt = sqrtm(self.Q)
         w_sqrt = sqrtm(self.w_cov)
         
-        OMEGA,Phi = self.omega_phi(M,A,B,e_x,e_u,H)
+        OMEGA,Phi = self.omega_phi(M,A,B,e_x,e_u,H,K_stab)
 
         # The R loss
         if K_stab is None: # Not includng K_stab
             R_loss = cp.sum([cp.norm(R_sqrt @ M[k] @ w_sqrt,'fro')**2 for k in range(H)])
         else: # Including K_stab
-            R_loss = cp.sum([cp.norm(R_sqrt @ M[0] @ w_sqrt,'fro')**2 ]\
-                +[cp.norm(R_sqrt @ (M[k]+K_stab @ Phi[k]) @ w_sqrt,'fro')**2 for k in range(1,H)]\
-                )
+            R_loss = cp.sum(
+                 # [cp.norm(R_sqrt @ M[0] @ w_sqrt,'fro')**2 ]\
+                [cp.norm(R_sqrt @ (M[k]-K_stab @ Phi[k]) @ w_sqrt,'fro')**2 for k in range(H)]\
+                +[cp.norm(R_sqrt @ (K_stab @ Phi[k]) @ w_sqrt,'fro')**2 for k in range(H,2*H)])
 
         # The Q loss
         Q_loss = cp.sum([cp.norm(Q_sqrt @ Phi[k] @ w_sqrt,'fro')**2 for k in range(2*H)])
@@ -155,12 +158,9 @@ class SafeDAP:
         else:
             prob = cp.Problem(cp.Minimize(R_loss+Q_loss),OMEGA)
         
-
         # prob.solve(verbose=True)
         prob.solve(verbose=False)
         
         self.M =  [m.value for m in M]
         # print(prob.value)
         return [m.value for m in M],[p.value for p in Phi[1:]]+[Phi[0]]
-    
-    

@@ -94,7 +94,8 @@ def ApproxDAP(M,w_hist,eta_bar):
 
     l = np.min([len(M),len(w_hist)])
     
-    return np.sum([M[k].dot(w_hist[-k-1]) for k in range(l)])+(np.random.rand()-0.5)*2*eta_bar
+    # return np.sum([M[k].dot(w_hist[-k-1]) for k in range(l)])+(np.random.rand()-0.5)*2*eta_bar
+    return np.sum([M[k].dot(w_hist[-k-1]) for k in range(l)])+(np.random.choice([-1,1]))*eta_bar
 
 
 
@@ -313,14 +314,19 @@ class QuadrotorEst:
         x_t = x_hist[:-1,:]
         x_t_1 = x_hist[1:,:]
         
-        A_hat = cp.vstack([cp.hstack([1,self.dt]),cp.hstack([0,1-beta])])
+        A_hat = cp.vstack([cp.hstack([1,self.dt])\
+                          ,cp.hstack([0,1-beta])])
         B_hat = cp.vstack([0,alpha])
 
-        objective = cp.Minimize(cp.sum_squares(x_t_1.T - ((A_hat-B_hat @ self.K_stab) @ x_t.T - B_hat @ u_hist.T )))
+        objective = cp.Minimize(cp.sum_squares(x_t_1.T - ((A_hat-B_hat @ self.K_stab) @ x_t.T + B_hat @ u_hist.T )))
 
         prob = cp.Problem(objective)
 
-        prob.solve()
+        v = prob.solve()
+
+        if np.isinf(v): # If inf value is encountered, it usually is due to singularity in problem data. Run more pre-steps to resolve such issue.
+            print(alpha.value,beta.value,self.K_stab,x_hist,u_hist)
+
 
         r = np.sqrt(x_dim**2 + x_dim*u_dim)/(np.sqrt(len(x_t))*eta_bar)
 
