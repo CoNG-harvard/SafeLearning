@@ -109,7 +109,12 @@ class Quadrotor1D(object):
     def reset(self):
         self.x = np.array(self.x_0)
     
-    def step(self,F):
+    def step(self,F,b=0):
+        
+        # b: The offset in base controller. Could be time varying. 
+        # The base controller is Kx+b
+        # The system is x_{t+1} = Ax[t]+B(-Kx[t]-b[t]) + BF[t] + w
+        
         
         if self.N_steps % self.w_change_period==0: # Determine whether w will change in this step.
             self.w = self.w_max * np.random.choice([1,-1])# Change w to be the adversarial noise + random noise.
@@ -119,7 +124,8 @@ class Quadrotor1D(object):
 
         w_vec[-1,-1] = self.w
         # print(self.w)
-        self.x = self.AK.dot(self.x)+self.B.dot(F) + w_vec 
+
+        self.x = self.AK.dot(self.x)+self.B.dot(-b+F) + w_vec 
 
         # Reset w to 0
         self.w=0

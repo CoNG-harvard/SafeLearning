@@ -61,36 +61,47 @@ class SafeDAP:
         print('gamma',gamma,'kappa_B',kappa_B,'z_max',z_max,'kappa',kappa)
         return e_x,e_u
 
-    def omega_phi(self,M,A,B,e_x,e_u,H,K_stab=None):
+    def omega_phi(self,M,A,B,e_x,e_u,H,K_stab=None,b=None):
             
             if K_stab is None:
-                K_stab = 0
+                K_stab = 0.0
+        
+            if b is None:
+                b = 0.0
 
-            # A_pow[n] = A^n, A_pow[0:H]
-            A_pow = [np.eye(self.x_dim)]
+            # Note, if K_stab, b are not None, A should be AK.
+            AK = A-B.dot(K_stab)
+
+
+            # AK_pow[n] = AK^n, A_pow[0:H]
+            AK_pow = [np.eye(self.x_dim)]
             for i in range(H):
-                A_pow.append(A_pow[-1].dot(A))
+                AK_pow.append(AK_pow[-1].dot(AK))
             
-            # print('A_pow',A_pow)
             # Express Transition Kernel Phi
             Phi = []
 
             for k in range(2*H):
                 if k<H:
-                    Phi_k = A_pow[k]
+                    Phi_k = AK_pow[k]
                 else:
                     Phi_k = 0
 
                 for i in range(H):
                     if 0<= k-i-1 and k-i-1<H:
-                        Phi_k += A_pow[i].dot(B) @ M[k-i-1]
+                        Phi_k += AK_pow[i].dot(B) @ M[k-i-1]
                 Phi.append(Phi_k)
 
-            # Construct the Safe Policy Set
+            # print(type(b),b)
+            if type(b) in [np.ndarray,np.float64,float]:
+                b_offset = self.D_x.dot(np.linalg.inv(AK-np.eye(self.x_dim)).dot(B).dot(b))
+            elif type(b) is cp.Variable:
+                b_offset = self.D_x.dot(np.linalg.inv(AK-np.eye(self.x_dim))).dot(B) @ b
+
             x_con = []
             for i in range(len(self.D_x)):
                 gi = cp.sum([cp.norm(self.D_x[i,:] @ Phi[k],1) for k in range(2*H)]) * self.w_max
-                x_con.append(gi<=self.d_x[i]-e_x)
+                x_con.append(gi<=self.d_x[i]-e_x-b_offset[i])
             # print('Sum of (A_pow norm1)',np.sum([np.linalg.norm(A,1) for A in A_pow]))
 
             u_con = []
@@ -125,7 +136,7 @@ class SafeDAP:
 
         return np.array([m.value for m in mid])
 
-    def solve(self,A,B,H,e_x=None,e_u=None,unconstrained=False,K_stab=None):
+    def solve(self,A,B,H,e_x=None,e_u=None,unconstrained=False,K_stab=None,b=None):
         
         if e_x is None or e_u is None:
             e_x,e_u = self.get_tightening_coefs(A,B,H)
@@ -138,7 +149,7 @@ class SafeDAP:
         Q_sqrt = sqrtm(self.Q)
         w_sqrt = sqrtm(self.w_cov)
         
-        OMEGA,Phi = self.omega_phi(M,A,B,e_x,e_u,H,K_stab)
+        OMEGA,Phi = self.omega_phi(M,A,B,e_x,e_u,H,K_stab,b)
 
         # The R loss
         if K_stab is None: # Not includng K_stab
@@ -164,3 +175,18 @@ class SafeDAP:
         self.M =  [m.value for m in M]
         # print(prob.value)
         return [m.value for m in M],[p.value for p in Phi[1:]]+[Phi[0]]
+    
+    def solve_b_star(self,b_target,A,B,e_x,e_u,H,K_stab):
+
+        # Solve for the offset b that is closest to b_target while maintaining feasibility of the DAP.
+
+        M = [cp.Variable((self.u_dim,self.x_dim)) for _ in range(H)]
+        b_star = cp.Variable(self.u_dim)
+
+        omega,phi = self.omega_phi(M,A,B,e_x,e_u,H,K_stab,b_star)
+
+        prob = cp.Problem(cp.Minimize(cp.norm(b_star-b_target)),constraints = omega)
+
+        prob.solve(verbose=False)
+
+        return b_star.value
