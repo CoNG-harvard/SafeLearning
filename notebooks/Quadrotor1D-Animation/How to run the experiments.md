@@ -22,7 +22,7 @@ $$
 
 The $b$ value needs to be passed into the method $env.step(x,b)$ for such offset in equilibrium point to take effect.
 
-# Dynamically chaning $b$ in Safe Learning
+# Dynamically changing $b$ in Safe Learning
 
 We know that since there are $e_x,e_u$ corrections in the DAP algorithm, choosing a $b$ such that $\bar{x}$ becomes very close to the $x_{max/min}$ boundaries often results in infeasibility of the algorithm. Therefore we developed the following method to alleviate such infeasibility issue.
 
