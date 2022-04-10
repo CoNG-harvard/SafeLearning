@@ -93,7 +93,8 @@ class SafeDAP:
                 Phi.append(Phi_k)
 
             # print(type(b),b)
-            if type(b) in [np.ndarray,np.float64,float]:
+            b_offset = 0.0
+            if type(b) in [np.ndarray,np.float64,float,int]:
                 b_offset = self.D_x.dot(np.linalg.inv(AK-np.eye(self.x_dim)).dot(B).dot(b))
             elif type(b) is cp.Variable:
                 b_offset = self.D_x.dot(np.linalg.inv(AK-np.eye(self.x_dim))).dot(B) @ b

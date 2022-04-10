@@ -281,6 +281,7 @@ class QuadrotorEst:
         self.dt = dt
         self.alpha_limit = alpha_limit
         self.beta_limit = beta_limit
+        
     
     @classmethod
     def interval_project(cls,a,a_lim):
@@ -296,7 +297,8 @@ class QuadrotorEst:
  
         return self.interval_project(alpha,self.alpha_limit),self.interval_project(beta,self.beta_limit)
 
-    def est(self,x_hist,u_hist,eta_bar=1):
+    def est(self,x_hist,u_hist,eta_bar=1,b_target=0):
+        print('b_target',b_target)
 
         # L2 Estimation
         if len(x_hist.shape)>1:
@@ -318,7 +320,7 @@ class QuadrotorEst:
                           ,cp.hstack([0,1-beta])])
         B_hat = cp.vstack([0,alpha])
 
-        objective = cp.Minimize(cp.sum_squares(x_t_1.T - ((A_hat-B_hat @ self.K_stab) @ x_t.T + B_hat @ u_hist.T )))
+        objective = cp.Minimize(cp.sum_squares(x_t_1.T - ((A_hat-B_hat @ self.K_stab) @ x_t.T + B_hat @ (-b_target+u_hist.T) )))
 
         prob = cp.Problem(objective)
 
@@ -330,7 +332,7 @@ class QuadrotorEst:
 
         r = np.sqrt(x_dim**2 + x_dim*u_dim)/(np.sqrt(len(x_t))*eta_bar)
 
-        # print('alpha',alpha.value,'beta',beta.value)            
+        # print('alpha',alpha.value,'beta',beta.value,'Loss:',prob.value)            
    
         alpha_proj,beta_proj = self.project(alpha.value,beta.value)
         # print('alpha_proj',alpha_proj,'beta_proj',beta_proj)            

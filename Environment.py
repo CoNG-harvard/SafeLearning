@@ -117,8 +117,8 @@ class Quadrotor1D(object):
         
         
         if self.N_steps % self.w_change_period==0: # Determine whether w will change in this step.
-            self.w = self.w_max * np.random.choice([1,-1])# Change w to be the adversarial noise + random noise.
-                
+            self.w = self.w_max * np.random.choice([1,-1])
+            # self.w = self.w_max * (np.random.rand()-0.5) * 2
         
         w_vec = np.zeros(self.x.shape)
 
